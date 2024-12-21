@@ -1,0 +1,11 @@
+aiohttp
+asyncio
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-cloud-firestore
+google-cloud-secret-manager
+Pillow
+discord-py-interactions==5.13.2
+Flask
