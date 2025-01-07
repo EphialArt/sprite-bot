@@ -14,52 +14,31 @@ from google.cloud import secretmanager
 import os
 import json
 from PIL import Image
-from flask import Flask, request
+from flask import request
 
-secret_client = secretmanager.SecretManagerServiceClient()
-app = Flask(__name__)
-
-def access_secret_version(secret_id, version_id="latest"):
-    name = f"projects/PROJECT-ID/secrets/{secret_id}/versions/{version_id}"
-    response = secret_client.access_secret_version(name=name)
-    secret = response.payload.data.decode("UTF-8")
-    return secret
-
-# Fetch the service account credentials from Secret Manager
-bot_token = access_secret_version("bot_token")
-firebase_service_account = access_secret_version("firebase_service_account")
-drive_service_account = access_secret_version("drive_service_account")
-
-# Parse the JSON credentials
-firebase_credentials = json.loads(firebase_service_account)
-drive_credentials = json.loads(drive_service_account)
-
- # Set up Firebase 
-credentials = Credentials.from_service_account_info(firebase_credentials)
-
-bot = Client(token=bot_token, intents=Intents.DEFAULT)
+bot = Client(token=os.environ["DISCORD_TOKEN"], intents=Intents.DEFAULT)
 
 # Map for Google Drive folder IDs
 FOLDER_MAPPING = {
     "temporary": {
-        "item": "FOLDER_ID",
-        "block": "FOLDER_ID",
-        "particle": "FOLDER_ID",
-        "misc": "FOLDER_IDx",
-        "model": "FOLDER_ID",
-        "painting": "FOLDER_ID",
-        "entities": "FOLDER_ID",
-        "gui": "FOLDER_ID"
+        "item": "1BQEyVG8ylKk7oAp8Jhz9M5gxtMhFO3a4",
+        "block": "18P3L5YvbgYGYVLadQTQBD-TeI0tm6YSC",
+        "particle": "1sXocLrUNiGZbJGzJld0IZGk-ftnvngwk",
+        "misc": "1bwf7tLbc0OFQXwxomH3nelpru6l7PQax",
+        "model": "1CofC0kIjF-NwKI6Q2ZBr2fOZ6j9ZJ5pc",
+        "painting": "1GIV8xibgHAX1Kv4OSwH3w1Vl5Js_4JM-",
+        "entities": "19l75hUh5PQX6cNO54-tkk7MTm0NAhjBy",
+        "gui": "1ujlruXhKbsROIdsGJjMEnH4GQ2OuAPQ5"
     },
     "permanent": {
-        "item": "FOLDER_ID",
-        "block": "FOLDER_ID",
-        "particle": "FOLDER_ID",
-        "misc": "FOLDER_ID",
-        "model": "FOLDER_ID",
-        "painting": "FOLDER_ID",
-        "entities": "FOLDER_ID",
-        "gui": "FOLDER_ID"
+        "item": "1NolwQk9msuyexp584AbCWbkv7K-c3FPh",
+        "block": "1QFwm04ug7TKxgdlLlEOv4hV6Hl5By5HX",
+        "particle": "1w3pEEtapERgv1hGQAZKQQ8fI5StjFC8K",
+        "misc": "1j0BE7E2guJ3WPWXnTOA_vctjsNvt22yL",
+        "model": "16lncPCMlHXhQBMVzQvEkXX0-Jyl163fC",
+        "painting": "1b2c0QL7caM04smn2L7yKynEtWh4uylQ0",
+        "entities": "1VOD3d9PDmzw9czvRh2Lh95qEc2tc0mMx",
+        "gui": "13x2lDkeBr78326cxAxjboHsTtCrjCCba"
     }
 }
 
@@ -69,13 +48,13 @@ is_found_upscale = True
 is_found_recursive = True
 
 def authenticate_db():
-    credentials = Credentials.from_service_account_info(firebase_credentials)
+    credentials = Credentials.from_service_account_file("credentials_db.json") # Initialize Firestore client with credentials
     db = firestore.Client(credentials=credentials)
     return db
 
 def authenticate_drive():
     SCOPES = ['https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_info(drive_credentials, scopes=SCOPES)
+    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     service = build("drive", "v3", credentials=creds)
     return service
 
@@ -177,7 +156,7 @@ def upload_to_drive(service, file_name: str, folder_id: str):
     is_found = False  # Keeps track of whether any file with the same name was found
 
     # New folder where the old files will be moved
-    archive_folder_id = "FOLDER_ID"
+    archive_folder_id = "1W9Zw6bRhL3nS6gj4S23YBcIdizaWdesN"
 
     try:
         # Check if archive folder exists and has correct permissions
@@ -331,13 +310,6 @@ async def on_ready():
     print("Ready")
     print(f"This bot is owned by {bot.owner}")
 
-@listen()
-async def keep_alive():
-    user = bot.get_user("USER-ID")
-    while True:
-        await user.send("Sending keep-alive signal")
-        await asyncio.sleep(290)
-
 @slash_command(name="upload", description="Upload sprite for review")
 @slash_option(
     name="folder",
@@ -371,7 +343,7 @@ async def upload_sprite(ctx: SlashContext, folder: str, image: Attachment):
                 with open(file_path, "wb") as f:
                     f.write(await response.read())
                 await ctx.send("Thank you for your submission!", delete_after=60)
-                poll_channel = bot.get_channel("CHANNEL-ID")
+                poll_channel = bot.get_channel("1318971041610993725")
                 print(ctx.author.global_name)
 
                 service = authenticate_drive()
@@ -404,9 +376,9 @@ async def upload_sprite(ctx: SlashContext, folder: str, image: Attachment):
                     if is_found == True:
                         print(f"File uploaded to temporary `{folder}` folder.")
                     else:
-                        await print("File upload failed, no file found or another issue occurred.")
+                        await ctx.send("File upload failed, no file found or another issue occurred.")
                 else:
-                    await print(f"Temporary folder `{folder}` not found.")
+                    await ctx.send(f"Temporary folder `{folder}` not found.")
                 
                 # Polling after upload
                 if is_found == True:
@@ -416,10 +388,10 @@ async def upload_sprite(ctx: SlashContext, folder: str, image: Attachment):
                     _poll = Poll(
                         question=_question,
                         answers=[_answer_yes, _answer_no],
-                        duration=24 
+                        duration=12
                     )
                     # Send poll
-                    poll_message = await poll_channel.send(content="<@&ROLE-ID>", poll=_poll)
+                    poll_message = await poll_channel.send(content=f"<@&1317840840324022273> {image.filename}", poll=_poll)
 
                     # Track the results
                     await asyncio.sleep(86405)
@@ -607,19 +579,11 @@ async def run_bot():
     except Exception as e:
         print(f"Error starting bot: {e}")
 
-def start_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
 
     # Schedule bot start in event loop
     loop.create_task(run_bot())
-
-    # Run Flask app in a separate thread
-    import threading
-    threading.Thread(target=start_flask).start()
 
     # Keep the event loop running
     loop.run_forever()
